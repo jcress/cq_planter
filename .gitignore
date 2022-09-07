@@ -1,7 +1,10 @@
 # dont version control scad
 scad/
 
-.pyc
+# dont version control stl
+*.stl
+
+*.pyc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
