@@ -6,7 +6,7 @@ from typing import List
 
 import cadquery as cq
 
-_DIMS = [175, 175, 90]
+_DIMS = [175, 175, 100]
 _WALL = 5
 _SIDES = 6
 
@@ -43,23 +43,30 @@ class insert:
     def __post_init__(self):
         self.x, self.y, self.z = self.dims
 
+        # basic shape
         self._xy_shape = (cq.Sketch().regularPolygon(n=self.sides,
                                                      r=int(self.x / 2)))
 
+        # bottom
         self._bottom = (cq.Sketch().regularPolygon(n=self.sides,
                                                    r=int(self.x / 2) *
                                                    self.bottom_offset))
-        self._hole = (cq.Sketch().trapezoid(20, 1, 110).fillet(0.2))
+
+        self._hole = (cq.Sketch().trapezoid(7, 1, 111).fillet(0.5))
+
+        # middle section
         self._middle = cq.Workplane().placeSketch(
             self._xy_shape.moved(cq.Location(cq.Vector(0, 0, self.z))),
             self._bottom).loft().faces("+Z").shell(self.wall_thickness *
                                                    -self.bottom_offset)
 
+        # cut holes in bottom
         self._middle = self._middle.faces(">X and >Y").workplane().transformed(
             (0, 0, -90)).placeSketch(self._hole).cutThruAll()
         self._middle = self._middle.faces("<X and <Y").workplane().transformed(
             (0, 0, -90)).placeSketch(self._hole).cutThruAll()
 
+        # top
         self._top = cq.Workplane("XY").placeSketch(
             self._xy_shape,
             self._xy_shape.moved(cq.Location(cq.Vector(0, 0,
@@ -74,6 +81,15 @@ class insert:
         self.shape = self._top.translate(cq.Vector(0, 0,
                                                    self.z)).union(self._middle)
 
+        # cut holes
+        for i in range(12 * 6):
+            self.shape = self.shape.cut(
+                cq.Workplane("XY").transformed(
+                    offset=cq.Vector(0, -75, 10 * (i / 10 + 1)),
+                    rotate=cq.Vector(-90, 0, 90)).placeSketch(
+                        self._hole).extrude(150).rotateAboutCenter((0, 0, 1),
+                                                                   15 * i))
+
 
 def assembly(dims: List[float] = None):
     """assemble"""
@@ -86,7 +102,7 @@ def assembly(dims: List[float] = None):
     _out.constrain("insert", "FixedRotation", (0, 0, 90))
     _out.solve()
 
-    # _out = _insert
+    #_out = _insert
     return _out
 
 
@@ -98,12 +114,13 @@ if __name__ == "__main__":
     out_dir = subprocess.check_output("git rev-parse --show-toplevel",
                                       shell=True,
                                       text=True).rstrip()
-    print("{out_dir}/stl/base.stl")
-    _base = base(dims=_DIMS).shape
-    cq.exporters.export(_base, "{out_dir}/stl/base.stl")
-    cq.exporters.export(_base, "base.stl")
-    _insert = insert(dims=_DIMS).shape
-    cq.exporters.export(_insert, "{out_dir}/stl/insert.stl")
+
+    for s in range(3, 8):
+        for ext in ['stl', 'svg']:
+            _base = base(dims=_DIMS, sides=s).shape
+            cq.exporters.export(_base, f"{out_dir}/stl/base_{s}.{ext}")
+            _insert = insert(dims=_DIMS, sides=s).shape
+            cq.exporters.export(_insert, f"{out_dir}/stl/insert_{s}.{ext}")
 
 else:
     render = assembly()
