@@ -82,13 +82,19 @@ class insert:
                                                    self.z)).union(self._middle)
 
         # cut holes
+        self._holes = cq.Workplane("XY").transformed(
+            offset=cq.Vector(0, -75, 10),
+            rotate=cq.Vector(-90, 0, 90)).placeSketch(
+                self._hole).extrude(150).rotateAboutCenter((0, 0, 1), 15)
+
         for i in range(12 * 6):
-            self.shape = self.shape.cut(
+            self._holes = self._holes.union(
                 cq.Workplane("XY").transformed(
                     offset=cq.Vector(0, -75, 10 * (i / 10 + 1)),
                     rotate=cq.Vector(-90, 0, 90)).placeSketch(
                         self._hole).extrude(150).rotateAboutCenter((0, 0, 1),
                                                                    15 * i))
+        self.shape = self.shape.cut(self._holes)
 
 
 def assembly(dims: List[float] = None):
@@ -102,7 +108,7 @@ def assembly(dims: List[float] = None):
     _out.constrain("insert", "FixedRotation", (0, 0, 90))
     _out.solve()
 
-    #_out = _insert
+    # _out = _insert
     return _out
 
 
