@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from functools import reduce
 from dataclasses import dataclass, field
 from typing import List
 
@@ -32,13 +33,19 @@ class base:
 @dataclass
 class insert:
     """
-    define the insert
+    Planter insert. 
+
+    Args:
+        dims: overall [x, y, z] dimensions
+        sides: number of sides in 
+        bottom_offset: The bottom is smaller than the top by a multiple 
+        top_height: height of top cap
     """
-    dims: List[float] = field(default_factory=_DIMS)
+    dims: List[float] = field(default_factory=[*_DIMS[0:1], _DIMS[2] * .8])
     sides: int = _SIDES
     wall_thickness: int = _WALL
     top_height: float = 20
-    bottom_offset: float = .3
+    bottom_offset: float = .6
 
     def __post_init__(self):
         self.x, self.y, self.z = self.dims
@@ -52,19 +59,11 @@ class insert:
                                                    r=int(self.x / 2) *
                                                    self.bottom_offset))
 
-        self._hole = (cq.Sketch().trapezoid(7, 1, 111).fillet(0.5))
-
         # middle section
         self._middle = cq.Workplane().placeSketch(
             self._xy_shape.moved(cq.Location(cq.Vector(0, 0, self.z))),
             self._bottom).loft().faces("+Z").shell(self.wall_thickness *
                                                    -self.bottom_offset)
-
-        # cut holes in bottom
-        self._middle = self._middle.faces(">X and >Y").workplane().transformed(
-            (0, 0, -90)).placeSketch(self._hole).cutThruAll()
-        self._middle = self._middle.faces("<X and <Y").workplane().transformed(
-            (0, 0, -90)).placeSketch(self._hole).cutThruAll()
 
         # top
         self._top = cq.Workplane("XY").placeSketch(
@@ -82,18 +81,20 @@ class insert:
                                                    self.z)).union(self._middle)
 
         # cut holes
-        self._holes = cq.Workplane("XY").transformed(
-            offset=cq.Vector(0, -75, 10),
-            rotate=cq.Vector(-90, 0, 90)).placeSketch(
-                self._hole).extrude(150).rotateAboutCenter((0, 0, 1), 15)
-
-        for i in range(12 * 6):
-            self._holes = self._holes.union(
+        self._hole = (cq.Sketch().trapezoid(7, 1, 111).fillet(0.5))
+        self._holes = reduce(
+            lambda holes, hole: holes.union(hole), [
                 cq.Workplane("XY").transformed(
                     offset=cq.Vector(0, -75, 10 * (i / 10 + 1)),
                     rotate=cq.Vector(-90, 0, 90)).placeSketch(
-                        self._hole).extrude(150).rotateAboutCenter((0, 0, 1),
-                                                                   15 * i))
+                        self._hole).extrude(150).rotateAboutCenter(
+                            (0, 0, 1), 15 * i) for i in range(12 * 6)
+            ],
+            cq.Workplane("XY").transformed(
+                offset=cq.Vector(0, -75, 10),
+                rotate=cq.Vector(-90, 0, 90)).placeSketch(
+                    self._hole).extrude(150).rotateAboutCenter((0, 0, 1), 15))
+
         self.shape = self.shape.cut(self._holes)
 
 
@@ -121,12 +122,12 @@ if __name__ == "__main__":
                                       shell=True,
                                       text=True).rstrip()
 
-    for s in range(3, 8):
+    for sides in range(3, 8):
         for ext in ['stl', 'svg']:
-            _base = base(dims=_DIMS, sides=s).shape
-            cq.exporters.export(_base, f"{out_dir}/stl/base_{s}.{ext}")
-            _insert = insert(dims=_DIMS, sides=s).shape
-            cq.exporters.export(_insert, f"{out_dir}/stl/insert_{s}.{ext}")
+            _base = base(dims=_DIMS, sides=sides).shape
+            cq.exporters.export(_base, f"{out_dir}/stl/base_{sides}.{ext}")
+            _insert = insert(dims=_DIMS, sides=sides).shape
+            cq.exporters.export(_insert, f"{out_dir}/stl/insert_{sides}.{ext}")
 
 else:
     render = assembly()
